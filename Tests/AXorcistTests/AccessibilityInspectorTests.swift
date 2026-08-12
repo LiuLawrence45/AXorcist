@@ -6,6 +6,17 @@ import Testing
 @Suite("Accessibility inspector", .tags(.safe))
 struct AccessibilityInspectorTests {
     @Test
+    func `Escape ends the inspector session`() {
+        #expect(AccessibilityInspectorKeyboard.shouldEndSession(
+            eventType: .keyDown,
+            keyCode: AccessibilityInspectorKeyboard.escapeKeyCode))
+        #expect(!AccessibilityInspectorKeyboard.shouldEndSession(
+            eventType: .keyUp,
+            keyCode: AccessibilityInspectorKeyboard.escapeKeyCode))
+        #expect(!AccessibilityInspectorKeyboard.shouldEndSession(eventType: .keyDown, keyCode: 36))
+    }
+
+    @Test
     func `Coordinate conversion bridges AppKit and AX screen origins`() {
         let axPoint = AccessibilityInspectorCoordinateSpace.accessibilityPoint(
             fromAppKit: CGPoint(x: 120, y: 700),

@@ -90,6 +90,15 @@ enum AccessibilityInspectorDepthResolver {
     }
 }
 
+enum AccessibilityInspectorKeyboard {
+    // macOS reports Escape with the hardware-independent virtual key code 53.
+    static let escapeKeyCode: Int64 = 53
+
+    static func shouldEndSession(eventType: CGEventType, keyCode: Int64) -> Bool {
+        eventType == .keyDown && keyCode == self.escapeKeyCode
+    }
+}
+
 enum AccessibilityInspectorMarkdown {
     static func render(_ snapshot: AccessibilityInspectorSnapshot) -> String {
         var lines = ["## Accessibility element", ""]
@@ -227,9 +236,13 @@ final class AccessibilityInspectorController {
         self.primaryScreenMaxY = primaryScreenMaxY
         self.configureApplication()
         self.configureOverlay()
+        guard self.escapeMonitor.start() else {
+            fputs("axorc inspect: Could not monitor Escape. Grant Accessibility access and try again.\n", stderr)
+            return 1
+        }
         self.startTracking()
         fputs("Move the pointer over an element, then click the green highlight to copy Markdown.\n", stderr)
-        fputs("Press Control-C in the terminal to cancel.\n", stderr)
+        fputs("Press Escape to end the inspector session.\n", stderr)
         fflush(stderr)
         NSApplication.shared.run()
         return self.exitCode
@@ -242,6 +255,9 @@ final class AccessibilityInspectorController {
     private var currentFrame: CGRect?
     private var primaryScreenMaxY: CGFloat = 0
     private var exitCode: Int32 = 0
+    private lazy var escapeMonitor = AccessibilityInspectorEscapeMonitor { [weak self] in
+        self?.stop()
+    }
 
     private func configureApplication() {
         let application = NSApplication.shared
@@ -389,8 +405,77 @@ final class AccessibilityInspectorController {
     private func stop() {
         self.timer?.invalidate()
         self.timer = nil
+        self.escapeMonitor.stop()
         self.overlay.orderOut(nil)
         NSApplication.shared.stop(nil)
+    }
+}
+
+@MainActor
+private final class AccessibilityInspectorEscapeMonitor {
+    init(onEscape: @escaping () -> Void) {
+        self.onEscape = onEscape
+    }
+
+    func start() -> Bool {
+        let eventMask = CGEventMask(1) << CGEventType.keyDown.rawValue
+        guard let eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: Self.eventCallback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque())
+        else {
+            return false
+        }
+
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: eventTap, enable: true)
+        self.eventTap = eventTap
+        self.runLoopSource = runLoopSource
+        return true
+    }
+
+    func stop() {
+        if let runLoopSource = self.runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        if let eventTap = self.eventTap {
+            CFMachPortInvalidate(eventTap)
+        }
+        self.runLoopSource = nil
+        self.eventTap = nil
+    }
+
+    private let onEscape: () -> Void
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+
+    private static let eventCallback: CGEventTapCallBack = { _, type, event, userInfo in
+        guard let userInfo else { return Unmanaged.passUnretained(event) }
+        let monitor = Unmanaged<AccessibilityInspectorEscapeMonitor>
+            .fromOpaque(userInfo)
+            .takeUnretainedValue()
+
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            MainActor.assumeIsolated {
+                if let eventTap = monitor.eventTap {
+                    CGEvent.tapEnable(tap: eventTap, enable: true)
+                }
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        guard AccessibilityInspectorKeyboard.shouldEndSession(eventType: type, keyCode: keyCode) else {
+            return Unmanaged.passUnretained(event)
+        }
+        MainActor.assumeIsolated {
+            monitor.onEscape()
+        }
+        return nil
     }
 }
 

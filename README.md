@@ -195,6 +195,7 @@ Or build and install it from source:
 ```bash
 swift build -c release --product axorc
 install -m 755 .build/release/axorc /usr/local/bin/axorc
+ln -sf /usr/local/bin/axorc /usr/local/bin/accessibility
 ```
 
 Run `axorc permissions` after installation. macOS will need Accessibility permission for inspection and automation.
@@ -534,16 +535,18 @@ axorc find --app Safari --title address --contains
 Launch the visual inspector from the terminal:
 
 ```bash
-axorc inspect
+accessibility
 ```
+
+`accessibility` is a shortcut for `axorc inspect --stay-open`.
 
 Move the pointer over an interface element to outline its accessibility frame in green, then click the outline. The
 selection click is captured by the overlay instead of activating the underlying control. `axorc` copies a Markdown
 description to the clipboard and also prints it to standard output. The description includes the app, role, title,
 identifier, frame, accessibility path, supported actions, and a reusable AXorcist JSON query.
 
-The command exits after one selection. Use `axorc inspect --stay-open` to copy multiple elements, or press Control-C in
-the terminal to stop inspecting.
+The session stays open so you can copy multiple elements. Press Escape to stop inspecting. You can still use
+`axorc inspect` when you want the inspector to exit after one selection.
 
 Accessibility permission is required. Check it first with `axorc permissions`.
 

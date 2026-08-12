@@ -9,7 +9,7 @@ import Logging
 @main
 struct AXORCCommand: ParsableCommand {
     static func main() async {
-        let arguments = Array(CommandLine.arguments.dropFirst())
+        let arguments = Self.arguments(for: CommandLine.arguments)
         Self.configureSwiftLogging(arguments: arguments)
         do {
             let frontendExitCode: Int32? = try await MainActor.run {
@@ -39,6 +39,19 @@ struct AXORCCommand: ParsableCommand {
             fputs("axorc error: \(error)\n", stderr)
             Foundation.exit(1)
         }
+    }
+
+    // The accessibility symlink provides a purpose-built inspector session without duplicating the executable.
+    static func arguments(for commandLine: [String]) -> [String] {
+        guard let executable = commandLine.first else { return [] }
+        let arguments = Array(commandLine.dropFirst())
+        guard URL(fileURLWithPath: executable).lastPathComponent == "accessibility" else {
+            return arguments
+        }
+        if arguments == ["--version"] {
+            return arguments
+        }
+        return ["inspect", "--stay-open"] + arguments
     }
 
     @preconcurrency nonisolated static var commandDescription: CommandDescription {

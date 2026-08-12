@@ -363,7 +363,7 @@ enum CLIFrontend {
     INTERACTION:
       Move the pointer to highlight an element with a green outline.
       Click the highlighted element to copy its Markdown description.
-      Press Control-C in the terminal to cancel.
+      Press Escape to end the inspector session.
 
     The overlay captures the selection click without activating the underlying element.
     """
@@ -418,6 +418,7 @@ enum CLIFrontend {
       axorc tree --app com.apple.dock --depth 2
       axorc find --app Safari --role AXButton --title Back
       axorc inspect
+      accessibility
       echo '{"command_id":"health","command":"ping"}' | axorc raw --stdin
 
     Accessibility permission required for inspection and automation.

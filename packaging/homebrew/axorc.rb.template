@@ -11,6 +11,7 @@ class Axorc < Formula
 
   def install
     bin.install "axorc"
+    bin.install_symlink bin/"axorc" => "accessibility"
   end
 
   def caveats
@@ -23,6 +24,7 @@ class Axorc < Formula
   test do
     assert_match "axorc #{version}", shell_output("#{bin}/axorc --version")
     assert_match "USAGE:", shell_output("#{bin}/axorc --help")
+    assert_match "USAGE: axorc inspect", shell_output("#{bin}/accessibility --help")
     system "/usr/bin/codesign", "--verify", "--strict", bin/"axorc"
     assert_match "anchor apple generic", shell_output("/usr/bin/codesign -d -r- #{bin}/axorc 2>&1")
   end

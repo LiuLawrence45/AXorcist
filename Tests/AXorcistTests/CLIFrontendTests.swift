@@ -6,6 +6,22 @@ import Testing
 @Suite("axorc user-facing CLI", .tags(.safe))
 struct CLIFrontendTests {
     @Test
+    func `Accessibility invocation starts a persistent inspector session`() {
+        #expect(AXORCCommand.arguments(for: ["/usr/local/bin/accessibility"]) == [
+            "inspect", "--stay-open",
+        ])
+        #expect(AXORCCommand.arguments(for: ["/usr/local/bin/accessibility", "--help"]) == [
+            "inspect", "--stay-open", "--help",
+        ])
+        #expect(AXORCCommand.arguments(for: ["/usr/local/bin/accessibility", "--version"]) == [
+            "--version",
+        ])
+        #expect(AXORCCommand.arguments(for: ["/usr/local/bin/axorc", "permissions"]) == [
+            "permissions",
+        ])
+    }
+
+    @Test
     func `Help and version are discoverable`() throws {
         let help = try runAXORCCommand(arguments: ["--help", "--not-a-real-flag"])
         #expect(help.exitCode == 0)
