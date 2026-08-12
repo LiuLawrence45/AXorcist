@@ -212,7 +212,8 @@ enum CLIFrontend {
                 helpTopic: "inspect")
         }
 
-        return AccessibilityInspectorController(stayOpen: parsed.flags.contains("stay-open")).run()
+        let inspector = AccessibilityInspectorController(stayOpen: parsed.flags.contains("stay-open"))
+        return inspector.run()
     }
 
     @MainActor

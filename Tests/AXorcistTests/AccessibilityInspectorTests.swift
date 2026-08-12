@@ -19,18 +19,38 @@ struct AccessibilityInspectorTests {
     }
 
     @Test
-    func `Stationary pointer keeps the current selection`() {
-        let frame = CGRect(x: 100, y: 200, width: 300, height: 80)
+    func `Window resolver picks the frontmost underlying application`() {
+        let windows = [
+            AccessibilityInspectorWindow(ownerPID: 50, bounds: CGRect(x: 0, y: 0, width: 500, height: 500)),
+            AccessibilityInspectorWindow(ownerPID: 20, bounds: CGRect(x: 100, y: 100, width: 200, height: 200)),
+            AccessibilityInspectorWindow(ownerPID: 30, bounds: CGRect(x: 100, y: 100, width: 200, height: 200)),
+        ]
 
-        #expect(AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
-            pointer: CGPoint(x: 250, y: 240),
-            frame: frame))
-        #expect(!AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
-            pointer: CGPoint(x: 50, y: 240),
-            frame: frame))
-        #expect(!AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
-            pointer: CGPoint(x: 250, y: 240),
-            frame: nil))
+        #expect(AccessibilityInspectorWindowResolver.applicationPIDs(
+            at: CGPoint(x: 150, y: 150),
+            excluding: 50,
+            windows: windows) == [20, 30])
+        #expect(AccessibilityInspectorWindowResolver.applicationPIDs(
+            at: CGPoint(x: 600, y: 600),
+            excluding: 50,
+            windows: windows).isEmpty)
+    }
+
+    @Test
+    func `Depth resolver chooses the smallest containing child`() {
+        let frames: [CGRect?] = [
+            CGRect(x: 0, y: 0, width: 500, height: 500),
+            CGRect(x: 100, y: 100, width: 200, height: 200),
+            CGRect(x: 140, y: 140, width: 40, height: 40),
+            nil,
+        ]
+
+        #expect(AccessibilityInspectorDepthResolver.smallestContainingFrameIndex(
+            at: CGPoint(x: 150, y: 150),
+            frames: frames) == 2)
+        #expect(AccessibilityInspectorDepthResolver.smallestContainingFrameIndex(
+            at: CGPoint(x: 600, y: 600),
+            frames: frames) == nil)
     }
 
     @Test

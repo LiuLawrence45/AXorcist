@@ -30,9 +30,63 @@ enum AccessibilityInspectorCoordinateSpace {
             width: rect.width,
             height: rect.height)
     }
+}
 
-    static func shouldKeepCurrentSelection(pointer: CGPoint, frame: CGRect?) -> Bool {
-        frame?.contains(pointer) == true
+struct AccessibilityInspectorWindow {
+    let ownerPID: pid_t
+    let bounds: CGRect
+}
+
+enum AccessibilityInspectorWindowResolver {
+    static func applicationPIDs(
+        at point: CGPoint,
+        excluding excludedPID: pid_t,
+        windows: [AccessibilityInspectorWindow]) -> [pid_t]
+    {
+        var seenPIDs = Set<pid_t>()
+        return windows.compactMap { window -> pid_t? in
+            guard window.ownerPID != excludedPID,
+                  window.bounds.contains(point),
+                  seenPIDs.insert(window.ownerPID).inserted
+            else {
+                return nil
+            }
+            return window.ownerPID
+        }
+    }
+
+    static func applicationPIDs(at point: CGPoint, excluding excludedPID: pid_t) -> [pid_t] {
+        guard let windowInfo = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID) as? [[String: Any]]
+        else {
+            return []
+        }
+
+        let windows = windowInfo.compactMap { info -> AccessibilityInspectorWindow? in
+            guard let ownerNumber = info[kCGWindowOwnerPID as String] as? NSNumber,
+                  let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
+                  let bounds = CGRect(dictionaryRepresentation: boundsDictionary)
+            else {
+                return nil
+            }
+            return AccessibilityInspectorWindow(ownerPID: pid_t(ownerNumber.intValue), bounds: bounds)
+        }
+        return Self.applicationPIDs(at: point, excluding: excludedPID, windows: windows)
+    }
+}
+
+enum AccessibilityInspectorDepthResolver {
+    static func smallestContainingFrameIndex(at point: CGPoint, frames: [CGRect?]) -> Int? {
+        frames.indices
+            .filter { index in
+                guard let frame = frames[index] else { return false }
+                return frame.width > 0 && frame.height > 0 && frame.contains(point)
+            }
+            .min { lhs, rhs in
+                guard let lhsFrame = frames[lhs], let rhsFrame = frames[rhs] else { return false }
+                return lhsFrame.width * lhsFrame.height < rhsFrame.width * rhsFrame.height
+            }
     }
 }
 
@@ -218,14 +272,6 @@ final class AccessibilityInspectorController {
             fromAppKit: appKitPoint,
             primaryScreenMaxY: self.primaryScreenMaxY)
 
-        // Keep the current target while the pointer remains inside it so AX hit-testing never sees our overlay panel.
-        if AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
-            pointer: accessibilityPoint,
-            frame: self.currentFrame)
-        {
-            return
-        }
-
         guard let element = self.elementUnderPointer(at: accessibilityPoint) else {
             self.clearSelection()
             return
@@ -253,14 +299,44 @@ final class AccessibilityInspectorController {
     }
 
     private func elementUnderPointer(at point: CGPoint) -> Element? {
-        guard let element = Element.elementAtPoint(point) else { return nil }
-        if self.owningPID(for: element) != ProcessInfo.processInfo.processIdentifier {
-            return element
+        let inspectorPID = ProcessInfo.processInfo.processIdentifier
+        let candidatePIDs = AccessibilityInspectorWindowResolver.applicationPIDs(
+            at: point,
+            excluding: inspectorPID)
+        for candidatePID in candidatePIDs {
+            guard let element = Element.elementAtPoint(point, pid: candidatePID),
+                  element.frame()?.contains(point) == true
+            else {
+                continue
+            }
+            return self.deepestElement(containing: point, startingAt: element)
         }
+        return nil
+    }
 
-        // Briefly remove the accessibility-hidden overlay as a fallback for apps that still expose its window.
-        self.overlay.orderOut(nil)
-        return Element.elementAtPoint(point)
+    // AX hit-testing can stop at a container, so walk into the smallest containing child until the leaf is reached.
+    private func deepestElement(containing point: CGPoint, startingAt element: Element) -> Element {
+        var current = element
+        var visited = Set<Element>()
+        let maxDepth = 25
+
+        for _ in 0..<maxDepth {
+            guard visited.insert(current).inserted,
+                  let children = current.children(),
+                  !children.isEmpty
+            else {
+                break
+            }
+            let frames = children.map { $0.frame() }
+            guard let nextIndex = AccessibilityInspectorDepthResolver.smallestContainingFrameIndex(
+                at: point,
+                frames: frames)
+            else {
+                break
+            }
+            current = children[nextIndex]
+        }
+        return current
     }
 
     private func snapshot(for element: Element, frame: CGRect) -> AccessibilityInspectorSnapshot {
@@ -320,12 +396,6 @@ final class AccessibilityInspectorController {
 
 @MainActor
 private final class AccessibilityInspectorOverlayPanel: NSPanel {
-    var onCapture: (() -> Void)? {
-        didSet {
-            self.overlayView.onCapture = self.onCapture
-        }
-    }
-
     init() {
         self.overlayView = AccessibilityInspectorOverlayView(frame: .zero)
         super.init(
@@ -347,6 +417,10 @@ private final class AccessibilityInspectorOverlayPanel: NSPanel {
     }
 
     private let overlayView: AccessibilityInspectorOverlayView
+
+    var onCapture: (() -> Void)? {
+        didSet { self.overlayView.onCapture = self.onCapture }
+    }
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
