@@ -64,6 +64,11 @@ enum CLIFrontend {
         var json = false
     }
 
+    private struct InspectOptions: ParsableCommand {
+        @Flag(name: .customLong("stay-open"), help: "Keep inspecting after each copied selection.")
+        var stayOpen = false
+    }
+
     @MainActor
     static func handle(arguments: [String]) throws -> Int32? {
         guard let first = arguments.first else {
@@ -80,7 +85,7 @@ enum CLIFrontend {
             return 0
         case "help":
             let topic = arguments.dropFirst().first
-            if let topic, !["permissions", "find", "tree", "raw"].contains(topic) {
+            if let topic, !["permissions", "find", "tree", "inspect", "raw"].contains(topic) {
                 throw UserError("Unknown help topic '\(topic)'.")
             }
             Swift.print(self.help(topic: topic))
@@ -91,6 +96,8 @@ enum CLIFrontend {
             return try self.runFind(arguments: Array(arguments.dropFirst()))
         case "tree":
             return try self.runTree(arguments: Array(arguments.dropFirst()))
+        case "inspect":
+            return try self.runInspect(arguments: Array(arguments.dropFirst()))
         case "raw":
             if arguments.dropFirst().contains(where: { $0 == "-h" || $0 == "--help" }) {
                 Swift.print(self.help(topic: "raw"))
@@ -196,6 +203,19 @@ enum CLIFrontend {
     }
 
     @MainActor
+    private static func runInspect(arguments: [String]) throws -> Int32 {
+        let parsed = try self.parse(InspectOptions(), arguments: arguments, topic: "inspect")
+        guard AXIsProcessTrusted() else {
+            throw UserError(
+                "Accessibility permission is required. Run 'axorc permissions' for setup instructions.",
+                exitCode: 1,
+                helpTopic: "inspect")
+        }
+
+        return AccessibilityInspectorController(stayOpen: parsed.flags.contains("stay-open")).run()
+    }
+
+    @MainActor
     private static func execute(
         _ envelope: CommandEnvelope,
         json: Bool,
@@ -275,6 +295,7 @@ enum CLIFrontend {
         case "permissions": self.permissionsHelp
         case "find": self.findHelp
         case "tree": self.treeHelp
+        case "inspect": self.inspectHelp
         case "raw": self.rawHelp
         default: self.rootHelp
         }
@@ -329,6 +350,23 @@ enum CLIFrontend {
       axorc tree --app com.apple.dock --depth 3
     """
 
+    private static let inspectHelp = """
+    OVERVIEW: Highlight the accessibility element under the pointer and copy it as Markdown.
+
+    USAGE: axorc inspect [--stay-open]
+
+    OPTIONS:
+      --stay-open  Keep inspecting after each copied selection.
+      -h, --help   Show help.
+
+    INTERACTION:
+      Move the pointer to highlight an element with a green outline.
+      Click the highlighted element to copy its Markdown description.
+      Press Control-C in the terminal to cancel.
+
+    The overlay captures the selection click without activating the underlying element.
+    """
+
     private static let rawHelp = """
     OVERVIEW: Execute the stable JSON command protocol.
 
@@ -366,6 +404,7 @@ enum CLIFrontend {
       permissions  Check Accessibility permission.
       find         Find one element by role, title, identifier, or value.
       tree         Print an application's accessibility tree.
+      inspect      Highlight an element and copy its Markdown description.
       raw          Execute the complete JSON automation protocol.
       help         Show help for a command.
 
@@ -377,6 +416,7 @@ enum CLIFrontend {
       axorc permissions
       axorc tree --app com.apple.dock --depth 2
       axorc find --app Safari --role AXButton --title Back
+      axorc inspect
       echo '{"command_id":"health","command":"ping"}' | axorc raw --stdin
 
     Accessibility permission required for inspection and automation.

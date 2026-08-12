@@ -529,6 +529,24 @@ axorc find --app Safari --role AXButton --title Back
 axorc find --app Safari --title address --contains
 ```
 
+### Inspect Under the Pointer
+
+Launch the visual inspector from the terminal:
+
+```bash
+axorc inspect
+```
+
+Move the pointer over an interface element to outline its accessibility frame in green, then click the outline. The
+selection click is captured by the overlay instead of activating the underlying control. `axorc` copies a Markdown
+description to the clipboard and also prints it to standard output. The description includes the app, role, title,
+identifier, frame, accessibility path, supported actions, and a reusable AXorcist JSON query.
+
+The command exits after one selection. Use `axorc inspect --stay-open` to copy multiple elements, or press Control-C in
+the terminal to stop inspecting.
+
+Accessibility permission is required. Check it first with `axorc permissions`.
+
 Run `axorc --help` or `axorc help find` for the complete terminal reference. Human-readable output goes to stdout, diagnostics go to stderr, and failures return nonzero exit codes.
 
 ### JSON Protocol

@@ -11,6 +11,7 @@ struct CLIFrontendTests {
         #expect(help.exitCode == 0)
         #expect(help.output?.contains("COMMANDS:") == true)
         #expect(help.output?.contains("permissions") == true)
+        #expect(help.output?.contains("inspect") == true)
         #expect(help.errorOutput?.isEmpty ?? true)
 
         let version = try runAXORCCommand(arguments: ["--version"])
@@ -25,6 +26,12 @@ struct CLIFrontendTests {
         #expect(result.exitCode == 0)
         #expect(result.output?.contains("USAGE: axorc find") == true)
         #expect(result.errorOutput?.isEmpty ?? true)
+
+        let inspect = try runAXORCCommand(arguments: ["inspect", "--garbage", "--help"])
+        #expect(inspect.exitCode == 0)
+        #expect(inspect.output?.contains("USAGE: axorc inspect") == true)
+        #expect(inspect.output?.contains("green") == true)
+        #expect(inspect.errorOutput?.isEmpty ?? true)
     }
 
     @Test
