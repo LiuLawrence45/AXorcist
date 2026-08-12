@@ -30,6 +30,10 @@ enum AccessibilityInspectorCoordinateSpace {
             width: rect.width,
             height: rect.height)
     }
+
+    static func shouldKeepCurrentSelection(pointer: CGPoint, frame: CGRect?) -> Bool {
+        frame?.contains(pointer) == true
+    }
 }
 
 enum AccessibilityInspectorMarkdown {
@@ -213,6 +217,14 @@ final class AccessibilityInspectorController {
         let accessibilityPoint = AccessibilityInspectorCoordinateSpace.accessibilityPoint(
             fromAppKit: appKitPoint,
             primaryScreenMaxY: self.primaryScreenMaxY)
+
+        // Keep the current target while the pointer remains inside it so AX hit-testing never sees our overlay panel.
+        if AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
+            pointer: accessibilityPoint,
+            frame: self.currentFrame)
+        {
+            return
+        }
 
         guard let element = self.elementUnderPointer(at: accessibilityPoint) else {
             self.clearSelection()

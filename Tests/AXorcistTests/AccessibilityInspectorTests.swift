@@ -19,6 +19,21 @@ struct AccessibilityInspectorTests {
     }
 
     @Test
+    func `Stationary pointer keeps the current selection`() {
+        let frame = CGRect(x: 100, y: 200, width: 300, height: 80)
+
+        #expect(AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
+            pointer: CGPoint(x: 250, y: 240),
+            frame: frame))
+        #expect(!AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
+            pointer: CGPoint(x: 50, y: 240),
+            frame: frame))
+        #expect(!AccessibilityInspectorCoordinateSpace.shouldKeepCurrentSelection(
+            pointer: CGPoint(x: 250, y: 240),
+            frame: nil))
+    }
+
+    @Test
     func `Markdown includes stable location and reusable query`() throws {
         let snapshot = AccessibilityInspectorSnapshot(
             applicationName: "Safari",
